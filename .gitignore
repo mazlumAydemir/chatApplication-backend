@@ -1,0 +1,26 @@
+# Frontend projesini Backend reposundan hariç tut
+chat-client/
+
+# Build results (Derleme Çıktıları)
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio & IDE files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets & Configs (Eğer şifreleriniz varsa)
+# appsettings.Development.json

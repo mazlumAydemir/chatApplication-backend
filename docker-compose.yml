@@ -7,33 +7,46 @@ services:
     container_name: chatapp_sql
     environment:
       - ACCEPT_EULA=Y
-      - SA_PASSWORD=YourStrong@Passw0rd!
+      - SA_PASSWORD=YourStrong@Passw0rd! # Buraya kendi şifreni yaz
     ports:
-      - "1433:1433"
+      - "1434:1433" # SQL Server'ın varsayılan portu 1433'tür, ancak hostta çakışmayı önlemek için 1434'e yönlendiriyoruz.
     volumes:
       - sql_data:/var/opt/mssql
 
-  # 2. REDIS (Mesajlaşma ve RSA anahtarları için kritik)
+  # 2. REDIS (Mesajlaşma, şifreleme ve SignalR için şart)
   redis:
     image: redis:latest
     container_name: chatapp_redis
     ports:
-      - "6379:6379"
+      - "6380:6379" # Redis'in varsayılan portu 6379'dur, ancak hostta çakışmayı önlemek için 6380'e yönlendiriyoruz.
 
-  # 3. BACKEND (C# API)
+  # 3. BACKEND (C# SignalR API)
   api:
     build: 
-      context: . # Backend klasörünün içinde olduğu için nokta koyuyoruz
-      dockerfile: Dockerfile # Projenin içinde bir Dockerfile olmalı
+      context: .
+      dockerfile: Dockerfile
     container_name: chatapp_api
     ports:
-      - "7220:8080"
+      - "7220:8080" # .NET 8 varsayılan portu 8080'dir.
     depends_on:
       - db
       - redis
     environment:
       - ConnectionStrings__DefaultConnection=Server=db;Database=ChatAppDb;User Id=sa;Password=YourStrong@Passw0rd!;TrustServerCertificate=True;
-      - Configuration__Redis=redis:6379 
+      - Configuration__Redis=redis:6379
 
+  # 4. FRONTEND (React / Vite)
+  client:
+    build: 
+      context: ./chat-client
+      dockerfile: Dockerfile
+    container_name: chatapp_client
+    ports:
+      - "5173:5173" # Vite portu
+    depends_on:
+      - api
+    volumes:               # EKLENEN KISIM BURASI
+      - ./chat-client:/app # Kendi klasörünü Docker'a canlı olarak bağlar
+      - /app/node_modules  # Paketlerin silinmesini engeller
 volumes:
   sql_data:

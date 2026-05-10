@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // React projesinin çalýþtýðý port
+        policy.WithOrigins("http://localhost:5173", "http://158.220.105.185:5173") // React projesinin çalýþtýðý port
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // Ýleride SignalR baðlantýsý için bu çok önemli!

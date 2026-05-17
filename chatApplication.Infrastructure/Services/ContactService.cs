@@ -22,7 +22,7 @@ namespace chatApplication.Application.Services
 
         public async Task<string> AddContactAsync(Guid currentUserId, string contactEmail)
         {
-            var contactUser = await _context.Users.FirstOrDefaultAsync(u => u.Email == contactEmail);
+            var contactUser = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == contactEmail);
             if (contactUser == null)
                 throw new Exception("Bu e-posta adresine sahip bir kullanıcı bulunamadı.");
 
@@ -58,7 +58,7 @@ namespace chatApplication.Application.Services
                     Id = c.ContactUser.Id,
                     FirstName = c.ContactUser.FirstName,
                     LastName = c.ContactUser.LastName,
-                    Email = c.ContactUser.Email,
+                    PhoneNumber = c.ContactUser.PhoneNumber,
                     Role = c.ContactUser.Role.ToString()
                 })
                 .ToListAsync();

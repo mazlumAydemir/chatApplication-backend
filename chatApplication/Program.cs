@@ -82,9 +82,6 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 // EKSÝK OLAN VE 500 HATASINI ÇÖZEN SATIR:
 builder.Services.AddScoped<IFileService, FileService>();
 
-// Email Servisi
-builder.Services.AddScoped<chatApplication.Application.Interfaces.IEmailService, chatApplication.Infrastructure.Services.EmailService>();
-// ==========================================
 
 // Swagger/OpenAPI Ayarlarý (JWT Butonu Eklendi!)
 builder.Services.AddEndpointsApiExplorer();

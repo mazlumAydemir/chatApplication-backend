@@ -3,7 +3,10 @@ using chatApplication.Infrastructure.Contexts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace chatApplication.Controllers
 {
@@ -18,6 +21,7 @@ namespace chatApplication.Controllers
         {
             _context = context;
         }
+
         [HttpGet("list")]
         public async Task<IActionResult> GetUsers()
         {
@@ -28,15 +32,15 @@ namespace chatApplication.Controllers
             if (!Guid.TryParse(currentUserIdStr, out Guid currentUserId))
                 return Unauthorized();
 
-            // Veritabanından, kendisi hariç ve e-postasını doğrulamış diğer tüm kullanıcıları çekiyoruz
+            // Veritabanından, kendisi hariç diğer tüm aktif kullanıcıları çekiyoruz (Email doğrulama şartı kaldırıldı!)
             var users = await _context.Users
-                .Where(u => u.IsEmailVerified && u.Id != currentUserId) // Artık ikisi de Guid, hata yok!
+                .Where(u => u.Id != currentUserId && u.IsActive) // IsEmailVerified kaldırıldı, sadece aktiflik kontrolü kaldı
                 .Select(u => new UserDto
                 {
                     Id = u.Id,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
-                    Email = u.Email,
+                    PhoneNumber = u.PhoneNumber, // Email yerine PhoneNumber dönüyoruz
                     Role = u.Role.ToString()
                 })
                 .ToListAsync();

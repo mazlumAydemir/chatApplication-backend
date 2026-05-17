@@ -27,7 +27,7 @@ namespace chatApplication.Controllers
             try
             {
                 var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-                var result = await _contactService.AddContactAsync(currentUserId, dto.Email);
+                var result = await _contactService.AddContactAsync(currentUserId, dto.PhoneNumber);
                 return Ok(new { message = result });
             }
             catch (Exception ex)

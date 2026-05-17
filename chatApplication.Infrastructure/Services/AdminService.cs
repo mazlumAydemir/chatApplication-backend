@@ -46,7 +46,7 @@ namespace chatApplication.Application.Services
                 .Select(u => new UserDto
                 {
                     Id = u.Id,
-                    Email = u.Email,
+                    PhoneNumber = u.PhoneNumber,
                     FirstName = u.FirstName,
                     LastName = u.LastName,
                     IsActive = u.IsActive,

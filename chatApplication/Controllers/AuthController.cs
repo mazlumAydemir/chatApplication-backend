@@ -8,13 +8,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.IdentityModel.Tokens;
+using System;
 using System.IdentityModel.Tokens.Jwt;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Security.Claims;
 using System.Text;
-using static Org.BouncyCastle.Math.EC.ECCurve;
+using System.Threading.Tasks;
+
 namespace chatApplication.Controllers
 {
     [Route("api/[controller]")]
@@ -22,93 +21,56 @@ namespace chatApplication.Controllers
     public class AuthController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        private readonly IEmailService _emailService;
         private readonly IConfiguration _config;
-        public AuthController(ApplicationDbContext context, IEmailService emailService, IConfiguration config)
+
+        // NOT: E-posta doğrulaması kaldırıldığı için IEmailService bağımlılığı temizlendi.
+        public AuthController(ApplicationDbContext context, IConfiguration config)
         {
             _context = context;
-            _emailService = emailService;
             _config = config;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto request)
         {
-            // 1. Bu e-posta ile daha önce kayıt olunmuş mu kontrol et
-            if (await _context.Users.AnyAsync(u => u.Email == request.Email))
-                return BadRequest("Bu e-posta adresi zaten kullanımda.");
+            // 1. Bu telefon numarası ile daha önce kayıt olunmuş mu kontrol et
+            if (await _context.Users.AnyAsync(u => u.PhoneNumber == request.PhoneNumber))
+                return BadRequest("Bu telefon numarası zaten kullanımda.");
 
-            // 2. 6 haneli rastgele bir doğrulama kodu üret
-            var verificationCode = new Random().Next(100000, 999999).ToString();
-
-            // 3. Yeni kullanıcı nesnesini oluştur (Sysadmin veya Client)
+            // 2. Yeni kullanıcı nesnesini oluştur
             var user = new User
             {
                 FirstName = request.FirstName,
                 LastName = request.LastName,
-                Email = request.Email,
-                // Şifreyi BCrypt ile hashliyoruz!
+                PhoneNumber = request.PhoneNumber,
+                // Şifreyi BCrypt ile hashliyoruz
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Role = (UserRole)request.RoleId,
-                EmailVerificationCode = verificationCode,
-                VerificationCodeExpiration = DateTime.UtcNow.AddMinutes(15) // Kodun ömrü 15 dakika
+                Role = (UserRole)request.RoleId
             };
 
-            // 4. Veritabanına kaydet
+            // 3. Veritabanına kaydet
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            // 5. E-posta servisini kullanarak kodu gönder
-            var emailBody = $@"
-                <h3>IEA (Image Encryption Application) Projesine Hoş Geldiniz!</h3>
-                <p>Sayın {user.FirstName} {user.LastName},</p>
-                <p>Doğrulama kodunuz: <b style='font-size:20px; color:blue;'>{verificationCode}</b></p>
-                <p>Bu kod 15 dakika boyunca geçerlidir.</p>";
-
-            await _emailService.SendEmailAsync(user.Email, "E-posta Doğrulama Kodu", emailBody);
-
-            return Ok("Kayıt başarılı. Lütfen e-postanıza gönderilen kodu doğrulayın.");
+            // 4. Doğrulama adımı olmadan direkt başarı mesajı dönüyoruz
+            return Ok(new { Message = "Kayıt başarıyla tamamlandı. Giriş yapabilirsiniz." });
         }
 
-        [HttpPost("verify-email")]
-        public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto request)
-        {
-            // 1. Kullanıcıyı bul
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
-            if (user == null) return BadRequest("Kullanıcı bulunamadı.");
-
-            // 2. Zaten doğrulanmış mı?
-            if (user.IsEmailVerified) return BadRequest("E-posta zaten doğrulanmış.");
-
-            // 3. Kod doğru mu ve süresi dolmuş mu kontrol et
-            if (user.EmailVerificationCode != request.Code || user.VerificationCodeExpiration < DateTime.UtcNow)
-                return BadRequest("Geçersiz veya süresi dolmuş doğrulama kodu.");
-
-            // 4. Doğrulamayı tamamla ve gereksiz kodları temizle
-            user.IsEmailVerified = true;
-            user.EmailVerificationCode = null;
-            user.VerificationCodeExpiration = null;
-
-            await _context.SaveChangesAsync();
-
-            return Ok("E-posta başarıyla doğrulandı. Artık sisteme giriş yapabilirsiniz.");
-        }
+        // NOT: "verify-email" uç noktası e-posta doğrulaması iptal edildiği için tamamen kaldırılmıştır.
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto request)
         {
-            // 1. Kullanıcıyı e-posta adresinden bul
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == request.Email);
+            // 1. Kullanıcıyı telefon numarasından bul
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.PhoneNumber == request.PhoneNumber);
 
             // 2. Kullanıcı yoksa veya şifre eşleşmiyorsa (BCrypt ile doğruluyoruz)
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                return BadRequest("Hatalı e-posta veya şifre.");
+                return BadRequest("Hatalı telefon numarası veya şifre.");
 
-            // 3. E-postasını doğrulamamışsa içeri alma
-            if (!user.IsEmailVerified)
-                return BadRequest("Lütfen giriş yapmadan önce e-posta adresinizi doğrulayın.");
+            // NOT: E-posta doğrulama kontrolü (IsEmailVerified) tamamen kaldırıldı.
 
-            // 4. Şifre doğruysa JWT Token oluştur!
+            // 3. Şifre doğruysa JWT Token oluştur
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -116,8 +78,8 @@ namespace chatApplication.Controllers
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role.ToString()) // Sysadmin veya Client olduğu bilgisini gömüyoruz
+                new Claim(ClaimTypes.MobilePhone, user.PhoneNumber), // Email yerine MobilePhone claim'i eklendi
+                new Claim(ClaimTypes.Role, user.Role.ToString())
             };
 
             var token = new JwtSecurityToken(

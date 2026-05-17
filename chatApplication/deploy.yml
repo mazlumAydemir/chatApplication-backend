@@ -16,5 +16,14 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/ChatProjesi
-            git pull origin main
-            DOCKER_BUILDKIT=0 sudo docker-compose up -d --build api
+            
+            # 1. ADIM: KODLARI ZORLA GÜNCELLE
+            # Bazen sunucuda 'git pull' hata verir. Bu komutlar GitHub'daki kod neyse
+            # sunucudakini acýmadan ona eþitler (çakýþmalarý %100 önler).
+            git fetch --all
+            git reset --hard origin/main
+            
+            # 2. ADIM: API'YÝ SIFIRDAN ÝNÞA ET
+            # --force-recreate: Docker'ýn eski hafýzayý kullanmasýný kesin olarak yasaklar.
+            # DOCKER_BUILDKIT=0 kýsmýný sildik çünkü yeni nesil Compose kullanýyoruz.
+            sudo docker-compose up -d --build --force-recreate api

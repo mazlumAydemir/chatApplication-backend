@@ -8,6 +8,6 @@ namespace chatApplication.Application.DTOs
 {
     public class ContactAddDto
     {
-        public string Email { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
     }
 }

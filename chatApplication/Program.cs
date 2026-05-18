@@ -1,40 +1,63 @@
-using chatApplication.Application.Interfaces;
-using chatApplication.Application.Services;
-using chatApplication.Infrastructure.Contexts;
+using chatApplication.Application;
+using chatApplication.Infrastructure;
+using chatApplication.Infrastructure.Persistence.Contexts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
-
+using chatApplication.Hubs;
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ==========================================
+// 1. TEMEL SERVÝSLER VE CORS
+// ==========================================
 builder.Services.AddControllers();
 
-// CORS Ayarlarý (React uygulamasýnýn API'ye eriþebilmesi için)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://158.220.105.185:5173") // React projesinin çalýþtýðý port
+        policy.WithOrigins("http://localhost:5173", "http://158.220.105.185:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // Ýleride SignalR baðlantýsý için bu çok önemli!
+              .AllowCredentials(); // SignalR için zorunlu
     });
 });
 
-builder.Services.AddSignalR(); // SignalR servisini projeye dahil eder
+// ==========================================
+// 2. SIGNALR VE KÝMLÝK EÞLEÞTÝRME (KRÝTÝK KOD)
+// ==========================================
+builder.Services.AddSignalR();
 
-// Redis Baðlantýsý
+// SignalR'ýn baðlanan kullanýcýlarý Token'daki NameIdentifier (Kullanýcý ID) ile eþleþtirmesini saðlar
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
+
+// ==========================================
+// 3. REDIS VE VERÝTABANI BAÐLANTILARI
+// ==========================================
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration["RedisCacheOptions:Configuration"];
     options.InstanceName = builder.Configuration["RedisCacheOptions:InstanceName"];
 });
 
-// JWT Kimlik Doðrulama Ayarlarý
+// DbContext, önceki adýmlarda AddInfrastructureServices içine eklendiði için
+// burada tekrar yazmaya gerek yok, karmaþýklýðý önler.
+
+// ==========================================
+// 4. KATMANLARIN (DEPENDENCY INJECTION) KAYDI
+// ==========================================
+// Yazdýðýmýz Extension metodlarý çaðýrarak servislerimizi (.NET'e) tanýtýyoruz
+builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
+
+// ==========================================
+// 5. JWT KÝMLÝK DOÐRULAMA (AUTHENTICATION)
+// ==========================================
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -44,12 +67,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!))
         };
 
-        // SignalR için Token okuma ayarý
+        // SignalR için WebSockets üzerinden gelen Token'ý okuma ayarý
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -57,8 +80,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
 
-                // Ýstek hub'a geliyorsa ve token URL'de (Query) varsa, oradan al
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub"))
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Token = accessToken;
                 }
@@ -67,29 +89,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Entity Framework Core'u MSSQL ile kullanmak için ekliyoruz
-builder.Services.AddDbContext<chatApplication.Infrastructure.Contexts.ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
 // ==========================================
-// SERVÝS KATMANI KAYITLARI (DEPENDENCY INJECTION)
+// 6. SWAGGER / OPENAPI AYARLARI
 // ==========================================
-builder.Services.AddScoped<IContactService, ContactService>();
-builder.Services.AddScoped<IProfileService, ProfileService>();
-builder.Services.AddScoped<IMessageService, MessageService>();
-builder.Services.AddScoped<IAdminService, AdminService>();
-
-// EKSÝK OLAN VE 500 HATASINI ÇÖZEN SATIR:
-builder.Services.AddScoped<IFileService, FileService>();
-
-
-// Swagger/OpenAPI Ayarlarý (JWT Butonu Eklendi!)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "IEA Chat API", Version = "v1" });
 
-    // Swagger ekranýna "Authorize" butonunu koyar
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text input below.\r\n\r\nExample: \"Bearer 12345abcdef\"",
@@ -120,7 +127,9 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ==========================================
+// 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
+// ==========================================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -128,26 +137,28 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowReactApp");
 
-// ÇOK ÖNEMLÝ: Kimlik doðrulama, Yetkilendirmeden (Authorization) ÖNCE gelmek zorundadýr!
-// --- .enc Uzantýlý Þifreli Dosyalara Ýzin Verme Ayarý ---
+// .enc Uzantýlý Þifreli Dosyalara Ýzin Verme Ayarý
 var provider = new FileExtensionContentTypeProvider();
-provider.Mappings[".enc"] = "text/plain"; // .enc uzantýsýnýn bir metin olduðunu sunucuya öðretiyoruz
+provider.Mappings[".enc"] = "text/plain";
 
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = provider
 });
-// --------------------------------------------------------
 
+app.UseCors("AllowReactApp");
+
+// DÝKKAT: Authentication her zaman Authorization'dan önce gelmelidir!
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHub<chatApplication.Hubs.ChatHub>("/chathub"); // Santralin adresini belirliyoruz
 app.MapControllers();
 
-// Veritabaný Migration'larýný otomatik uygula
+// SignalR Hub'ýný dýþarý açýyoruz (ChatHub sýnýfýný oluþturduðunda bu endpoint aktif olacak)
+ app.MapHub<ChatHub>("/chathub"); 
+
+// Veritabaný Migration'larýný otomatik uygulama
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -155,3 +166,19 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+// ==========================================
+// YARDIMCI SINIFLAR
+// ==========================================
+
+/// <summary>
+/// SignalR'ýn, JWT içerisindeki ID'yi (NameIdentifier) Connection ile eþleþtirmesi için gerekli sýnýf.
+/// </summary>
+public class CustomUserIdProvider : IUserIdProvider
+{
+    public string? GetUserId(HubConnectionContext connection)
+    {
+        // TokenService içerisinde belirlediðimiz ClaimTypes.NameIdentifier (User.Id) deðerini çeker
+        return connection.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+}

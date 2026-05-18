@@ -1,32 +1,27 @@
 ﻿using System;
 
-namespace chatApplication.Domain.Entities
+
+namespace chatApplication.Domain.Entities;
+
+public class User
 {
-    public class User
-    {
-        public Guid Id { get; set; }
+    public int Id { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public string? ProfilePictureUrl { get; set; }
 
-        // Giriş işlemi için ana kimlik alanı artık telefon numarası (Zorunlu yapıldı)
-        public string PhoneNumber { get; set; } = string.Empty;
-        public string PasswordHash { get; set; } = string.Empty;
+    public string? PublicKey { get; set; }
+    public string Role { get; set; } = "Client";
 
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
+    // EF Core Relational Properties (Navigation)
+    public ICollection<Message> SentMessages { get; set; } = new List<Message>();
+    public ICollection<Message> ReceivedMessages { get; set; } = new List<Message>();
 
-        // --- PROFİL ALANLARI ---
-        // Email artık zorunlu değil, isteğe bağlı bir profil alanı haline getirildi
-     
-        public string? ProfilePictureUrl { get; set; }
-        public string? Bio { get; set; }
-    
+    // Kullanıcının kendi rehberindeki kişiler
+    public ICollection<Contact> Contacts { get; set; } = new List<Contact>();
 
-        // Kullanıcı Rolü (Enum türünden)
-        public chatApplication.Domain.Enums.UserRole Role { get; set; }
-
-        // Durum ve Zaman Bilgileri
-        public bool IsOnline { get; set; }
-        public DateTime? LastSeen { get; set; }
-        public bool IsActive { get; set; } = true; // Varsayılan olarak aktif
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    }
+    // Bu kullanıcıyı rehberine ekleyenler (EF Core ters ilişkisi için faydalı)
+    public ICollection<Contact> ContactOf { get; set; } = new List<Contact>();
 }

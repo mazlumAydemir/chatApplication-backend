@@ -1,43 +1,32 @@
-﻿using chatApplication.Application.DTOs;
-using chatApplication.Application.Interfaces;
+﻿using chatApplication.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace chatApplication.Controllers
+namespace chatApplication.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+[Authorize(Roles = "Sysadmin")]
+public class AdminController : ControllerBase
 {
-    // Veritabanındaki "Sysadmin" rolüne izin veriyoruz
-    [Authorize(Roles = "Sysadmin")]
-    [Route("api/[controller]")]
-    [ApiController]
-    public class AdminController : ControllerBase
+    private readonly IAdminService _adminService;
+
+    public AdminController(IAdminService adminService)
     {
-        private readonly IAdminService _adminService;
+        _adminService = adminService;
+    }
 
-        // Bütün iş mantığını daha önce yazdığımız IAdminService'e devrediyoruz
-        public AdminController(IAdminService adminService)
-        {
-            _adminService = adminService;
-        }
-
-        [HttpGet("stats")]
-        public async Task<IActionResult> GetStats()
+    [HttpGet("monitoring")]
+    public async Task<IActionResult> GetSystemStats()
+    {
+        try
         {
             var stats = await _adminService.GetSystemStatsAsync();
             return Ok(stats);
         }
-
-        [HttpGet("users")]
-        public async Task<IActionResult> GetUsers()
+        catch (Exception ex)
         {
-            var users = await _adminService.GetAllUsersAsync();
-            return Ok(users);
-        }
-
-        [HttpPost("toggle-ban/{userId}")]
-        public async Task<IActionResult> ToggleBan(Guid userId)
-        {
-            var result = await _adminService.ToggleUserBanAsync(userId);
-            return result ? Ok() : NotFound();
+            return StatusCode(500, new { message = ex.Message });
         }
     }
 }

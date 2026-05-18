@@ -6,8 +6,11 @@ using System.Threading.Tasks;
 
 namespace chatApplication.Application.DTOs;
 
-public class LoginDto
+public class AddContactDto
 {
+    // Eklenecek kişinin numarası
     public string PhoneNumber { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
+
+    // Rehbere hangi isimle kaydedileceği (Opsiyonel)
+    public string? SavedName { get; set; }
 }

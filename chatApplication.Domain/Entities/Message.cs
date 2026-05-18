@@ -1,27 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace chatApplication.Domain.Entities;
 
-namespace chatApplication.Domain.Entities
+public class Message
 {
-    public class Message
-    {
-        public Guid Id { get; set; }
-        public Guid SenderId { get; set; } // Gönderen
-        public Guid ReceiverId { get; set; } // Alan
+    public int Id { get; set; }
+    public int SenderId { get; set; }
+    public int ReceiverId { get; set; }
 
-        // Şifreli Mesajın Kendisi (AES ile şifrelenmiş)
-        public string EncryptedContent { get; set; } = string.Empty;
+    // Hem resim hem text istendiği için
+    public string? TextContent { get; set; }
 
-        // Karşı tarafın okuyabilmesi için onun Public Key'i ile şifrelenmiş AES Anahtarı
-        public string ReceiverEncryptedSessionKey { get; set; } = string.Empty;
+    // DES ile şifrelenmiş resmin yolu (Zorunlu İster)
+    public string? EncryptedImageUrl { get; set; }
 
-        // Senin kendi mesajını okuyabilmen için senin Public Key'in ile şifrelenmiş AES Anahtarı
-        public string SenderEncryptedSessionKey { get; set; } = string.Empty;
+    // Görüntüyü çözecek DES anahtarının, alıcının RSA public key'i ile şifrelenmiş hali (Zorunlu İster)
+    public string? EncryptedSessionKey { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public bool IsRead { get; set; } = false;
-    }
+    // Resmin kaynağını doğrulamak için göndericinin imzaladığı veri (Zorunlu İster)
+    public string? DigitalSignature { get; set; }
+
+    public DateTime SentAt { get; set; } = DateTime.UtcNow;
+
+    // EF Core Relational Properties
+    public User Sender { get; set; } = null!;
+    public User Receiver { get; set; } = null!;
 }

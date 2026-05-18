@@ -1,60 +1,36 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using chatApplication.Application.Interfaces.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace chatApplication.Controllers
+namespace chatApplication.Controllers;
+
+[Route("api/[controller]")]
+[ApiController]
+[Authorize]
+public class ImageController : ControllerBase
 {
-    [Route("api/[controller]")]
-    [ApiController]
-    [Authorize] // Sadece giriş yapmış kullanıcılar resim yükleyebilir veya indirebilir
-    public class ImageController : ControllerBase
+    private readonly IImageService _imageService;
+    private readonly IWebHostEnvironment _environment;
+
+    public ImageController(IImageService imageService, IWebHostEnvironment environment)
     {
-        // Şifreli resimlerin kaydedileceği klasörün yolu
-        private readonly string _uploadFolder = Path.Combine(Directory.GetCurrentDirectory(), "EncryptedImages");
+        _imageService = imageService;
+        _environment = environment;
+    }
 
-        public ImageController()
+    [HttpPost("upload")]
+    public async Task<IActionResult> UploadEncryptedImage(IFormFile file)
+    {
+        try
         {
-            // Eğer sunucuda bu klasör yoksa, otomatik olarak oluştur
-            if (!Directory.Exists(_uploadFolder))
-            {
-                Directory.CreateDirectory(_uploadFolder);
-            }
+            var webRootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var fileUrl = await _imageService.UploadEncryptedImageAsync(file, webRootPath);
+
+            return Ok(new { EncryptedImageUrl = fileUrl });
         }
-
-        [HttpPost("upload")]
-        public async Task<IActionResult> UploadImage(IFormFile file)
+        catch (Exception ex)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("Geçersiz veya boş dosya.");
-
-            // Güvenlik için dosyanın orijinal adını çöpe atıp, ona eşsiz bir Guid adı veriyoruz.
-            // Uzantısını da ".enc" (encrypted) yaparak şifreli olduğunu belli ediyoruz.
-            var fileName = Guid.NewGuid().ToString() + ".enc";
-            var filePath = Path.Combine(_uploadFolder, fileName);
-
-            // Gelen dosyayı sunucudaki klasöre kopyalıyoruz
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // Resmi gönderen kişiye, resmin sunucudaki yeni adını geri döndürüyoruz
-            // (Bu sayede bu adı SignalR ile karşı tarafa mesaj olarak fırlatabilecek)
-            return Ok(new { FileName = fileName, Message = "Şifreli dosya başarıyla yüklendi." });
-        }
-
-        [HttpGet("download/{fileName}")]
-        public IActionResult DownloadImage(string fileName)
-        {
-            var filePath = Path.Combine(_uploadFolder, fileName);
-
-            if (!System.IO.File.Exists(filePath))
-                return NotFound("İstenen dosya sunucuda bulunamadı.");
-
-            var fileBytes = System.IO.File.ReadAllBytes(filePath);
-
-            // Dosyayı resim (jpeg/png) olarak DEĞİL, "application/octet-stream" yani ham veri (byte) olarak döndürüyoruz.
-            // Çünkü bu şifreli bir dosya, şifresi ancak istemci tarafında çözülecek.
-            return File(fileBytes, "application/octet-stream", fileName);
+            return BadRequest(new { message = ex.Message });
         }
     }
 }

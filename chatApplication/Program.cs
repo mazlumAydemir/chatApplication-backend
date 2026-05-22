@@ -40,6 +40,7 @@ builder.Services.AddCors(options =>
 // 2. SIGNALR VE KİMLİK EŞLEŞTİRME
 // ==========================================
 builder.Services.AddSignalR();
+// ✅ Sınıf (CustomUserIdProvider) dosyanın en altında tanımlı!
 builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
 // ==========================================
@@ -81,10 +82,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
 
-                // ✅ GÜNCELLEME: Hem normal hem de alt yol (subpath) üzerinden gelen SignalR token isteklerini yakala
-                if (!string.IsNullOrEmpty(accessToken) &&
-                   (path.StartsWithSegments("/chathub", StringComparison.OrdinalIgnoreCase) ||
-                    path.StartsWithSegments("/chat-backend/chathub", StringComparison.OrdinalIgnoreCase)))
+                // ✅ Nginx /chat-backend/ kısmını sildiği için sadece orijinal rotayı kontrol ediyoruz
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Token = accessToken;
                 }
@@ -131,10 +130,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// ==========================================
-// ⚠️ NGINX SUBPATH AYARI
-// ==========================================
-app.UsePathBase("/chat-backend");
+// 🛑 app.UsePathBase("/chat-backend"); TAMAMEN SİLİNDİ! 
+// Kestrel artık saf localhost gibi çalışır, tüm adres yönlendirmesini Nginx halleder.
 
 // ==========================================
 // UPLOADS KLASÖRÜNÜ HEMEN OLUŞTUR
@@ -167,7 +164,6 @@ catch (Exception ex)
 // 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
 // ==========================================
 
-// ✅ PROXY BAŞLIKLARINI GÜVENLE YAKALA
 var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
@@ -179,6 +175,7 @@ app.UseForwardedHeaders(forwardedOptions);
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
+    // Tarayıcı API'ye /chat-backend adresi üzerinden ulaştığı için JSON yolunu bu şekilde gösteriyoruz:
     c.SwaggerEndpoint("/chat-backend/swagger/v1/swagger.json", "IEA Chat API v1");
     c.RoutePrefix = "swagger";
 });
@@ -208,9 +205,6 @@ if (Directory.Exists(uploadsPath))
     Console.WriteLine("✅ /uploads endpoint'i aktif");
 }
 
-// 🛑 Cloudflare SSL yapılandırması sebebiyle devre dışı bırakıldı (WebSocket kopmalarını önler)
-// app.UseHttpsRedirection();  
-
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -219,9 +213,8 @@ app.MapControllers();
 // ==========================================
 // SIGNALR HUB EŞLEŞTİRMELERİ
 // ==========================================
-// ✅ GÜNCELLEME: Nginx yönlendirme varyasyonlarının tamamını karşılamak için çift rota tanımlandı
+// ✅ SADECE TEK ROTA: Nginx fazlalığı sildiği için Kestrel direkt bunu karşılar
 app.MapHub<ChatHub>("/chathub");
-app.MapHub<ChatHub>("/chat-backend/chathub");
 
 // ==========================================
 // DATABASE MIGRATION

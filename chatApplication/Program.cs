@@ -129,7 +129,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
-app.UsePathBase("/chat-backend");
+
 // 🛑 app.UsePathBase("/chat-backend"); TAMAMEN SİLİNDİ! 
 // Kestrel artık saf localhost gibi çalışır, tüm adres yönlendirmesini Nginx halleder.
 

@@ -127,7 +127,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
-
+app.UsePathBase("/chat-backend");
 // ==========================================
 // ⚠️ KRİTİK: UPLOADS KLASÖRÜNÜ HEMEN OLUŞTUR
 // UseStaticFiles'den ÖNCE olmalı!
@@ -167,10 +167,12 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
+// ✅ DÜZELTME: Swagger'ın Nginx /chat-backend/ alt yolundan düzgün çalışması için güncellendi
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "IEA Chat API v1");
+    c.SwaggerEndpoint("/chat-backend/swagger/v1/swagger.json", "IEA Chat API v1");
+    c.RoutePrefix = "swagger";
 });
 
 // ✅ KRİTİK DEĞİŞİKLİK: CORS, UseStaticFiles'dan ÖNCE çağrılmalı!

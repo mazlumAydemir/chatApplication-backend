@@ -6,9 +6,6 @@ using System.Threading.Tasks;
 using chatApplication.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-using chatApplication.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
-
 namespace chatApplication.Infrastructure.Persistence.Contexts;
 
 public class ApplicationDbContext : DbContext
@@ -21,7 +18,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<Contact> Contacts { get; set; }
-
+    public DbSet<SystemLog> SystemLog { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using chatApplication.Application.Interfaces.Services;
 using chatApplication.Application.Services;
+using chatApplication.Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace chatApplication.Application;
@@ -19,6 +20,8 @@ public static class ServiceRegistration
         services.AddScoped<IMessageService, MessageService>();
         services.AddScoped<IContactService, ContactService>();
         services.AddScoped<IImageService, ImageService>(); 
-        services.AddScoped<IAdminService, AdminService>(); 
+        services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ITokenService, TokenService>();
     }
 }

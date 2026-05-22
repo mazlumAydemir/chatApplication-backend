@@ -33,5 +33,6 @@ public class ImageService : IImageService
         }
 
         return $"/uploads/{uniqueFileName}";
+
     }
 }

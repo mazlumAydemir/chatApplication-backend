@@ -1,4 +1,4 @@
-using chatApplication.Application;
+ï»¿using chatApplication.Application;
 using chatApplication.Infrastructure;
 using chatApplication.Infrastructure.Persistence.Contexts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -10,10 +10,13 @@ using Microsoft.OpenApi.Models;
 using System.Security.Claims;
 using System.Text;
 using chatApplication.Hubs;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.FileProviders;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ==========================================
-// 1. TEMEL SERVİSLER VE CORS
+// 1. TEMEL SERVÄ°SLER VE CORS AYARLARI
 // ==========================================
 builder.Services.AddControllers();
 
@@ -21,23 +24,26 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://158.220.105.185:5173")
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://158.220.105.185:5173",
+                "http://chat.mazlumaydemir.online",
+                "https://chat.mazlumaydemir.online"
+              )
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // SignalR için zorunlu
+              .AllowCredentials();
     });
 });
 
 // ==========================================
-// 2. SIGNALR VE KİMLİK EŞLEŞTİRME (KRİTİK KOD)
+// 2. SIGNALR VE KÄ°MLÄ°K EÅLEÅTÄ°RME
 // ==========================================
 builder.Services.AddSignalR();
-
-// SignalR'ın bağlanan kullanıcıları Token'daki NameIdentifier (Kullanıcı ID) ile eşleştirmesini sağlar
 builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
 // ==========================================
-// 3. REDIS VE VERİTABANI BAĞLANTILARI
+// 3. REDIS VE VERÄ°TABANI BAÄLANTILARI
 // ==========================================
 builder.Services.AddStackExchangeRedisCache(options =>
 {
@@ -45,18 +51,14 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.InstanceName = builder.Configuration["RedisCacheOptions:InstanceName"];
 });
 
-// DbContext, önceki adımlarda AddInfrastructureServices içine eklendiği için
-// burada tekrar yazmaya gerek yok, karmaşıklığı önler.
-
 // ==========================================
 // 4. KATMANLARIN (DEPENDENCY INJECTION) KAYDI
 // ==========================================
-// Yazdığımız Extension metodları çağırarak servislerimizi (.NET'e) tanıtıyoruz
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 // ==========================================
-// 5. JWT KİMLİK DOĞRULAMA (AUTHENTICATION)
+// 5. JWT KÄ°MLÄ°K DOÄRULAMA (AUTHENTICATION)
 // ==========================================
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -72,7 +74,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"]!))
         };
 
-        // SignalR için WebSockets üzerinden gelen Token'ı okuma ayarı
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -99,7 +100,7 @@ builder.Services.AddSwaggerGen(c =>
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text input below.\r\n\r\nExample: \"Bearer 12345abcdef\"",
+        Description = "JWT Authorization header using the Bearer scheme.",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
@@ -128,57 +129,116 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ==========================================
-// 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
+// âš ï¸ KRÄ°TÄ°K: UPLOADS KLASÃ–RÃœNÃœ HEMEN OLUÅTUR
+// UseStaticFiles'den Ã–NCE olmalÄ±!
 // ==========================================
-if (app.Environment.IsDevelopment())
+
+// âœ… DÃœZELTME: Proje root'undaki uploads klasÃ¶rÃ¼nÃ¼ bul
+var uploadsPath = Path.Combine(
+    AppDomain.CurrentDomain.BaseDirectory,  // /bin/Debug/net8.0 veya /bin/Release/net8.0
+    "..", "..", "..", "uploads"             // Proje root'una Ã§Ä±k, uploads'a git
+);
+uploadsPath = Path.GetFullPath(uploadsPath);  // GerÃ§ek path'i al
+
+try
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    if (!Directory.Exists(uploadsPath))
+    {
+        Directory.CreateDirectory(uploadsPath);
+        Console.WriteLine($"âœ… Uploads klasÃ¶rÃ¼ oluÅŸturuldu: {uploadsPath}");
+    }
+    else
+    {
+        Console.WriteLine($"âœ… Uploads klasÃ¶rÃ¼ zaten var: {uploadsPath}");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"âŒ Uploads klasÃ¶rÃ¼ oluÅŸturulamadÄ±: {ex.Message}");
+    throw;
 }
 
-app.UseHttpsRedirection();
+// ==========================================
+// 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
+// ==========================================
 
-// .enc Uzantılı Şifreli Dosyalara İzin Verme Ayarı
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "IEA Chat API v1");
+});
+
+// âœ… KRÄ°TÄ°K DEÄÄ°ÅÄ°KLÄ°K: CORS, UseStaticFiles'dan Ã–NCE Ã§aÄŸrÄ±lmalÄ±!
+app.UseCors("AllowReactApp");
+
+// .enc UzantÄ±lÄ± Åifreli Dosyalara Ä°zin Verme AyarÄ±
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".enc"] = "text/plain";
 
+// ğŸ“ wwwroot klasÃ¶rÃ¼nÃ¼ sun
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = provider
 });
 
-app.UseCors("AllowReactApp");
+// ğŸ“ uploads klasÃ¶rÃ¼nÃ¼ sun
+if (Directory.Exists(uploadsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uploadsPath),
+        RequestPath = "/uploads",
+        ContentTypeProvider = provider
+        // OnPrepareResponse blokunu kaldÄ±rdÄ±k Ã§Ã¼nkÃ¼ UseCors artÄ±k bunu global olarak hallediyor.
+    });
+    Console.WriteLine("âœ… /uploads endpoint'i aktif");
+}
+else
+{
+    Console.WriteLine($"âŒ /uploads endpoint'i etkinleÅŸtirilemedi - klasÃ¶r yok: {uploadsPath}");
+}
 
-// DİKKAT: Authentication her zaman Authorization'dan önce gelmelidir!
+app.UseHttpsRedirection();  // âœ… HTTPS redirect
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/chathub");
 
-// SignalR Hub'ını dışarı açıyoruz (ChatHub sınıfını oluşturduğunda bu endpoint aktif olacak)
- app.MapHub<ChatHub>("/chathub"); 
-
-// Veritabanı Migration'larını otomatik uygulama
+// ==========================================
+// DATABASE MIGRATION
+// ==========================================
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Database.Migrate();
+        Console.WriteLine("âœ… Database migration baÅŸarÄ±lÄ±");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"âŒ Database migration hatasÄ±: {ex.Message}");
+    }
 }
 
+Console.WriteLine("ğŸš€ Uygulama baÅŸlatÄ±ldÄ±!");
+Console.WriteLine($"ğŸ“ Uploads KlasÃ¶rÃ¼: {uploadsPath}");
 app.Run();
 
 // ==========================================
 // YARDIMCI SINIFLAR
 // ==========================================
 
-/// <summary>
-/// SignalR'ın, JWT içerisindeki ID'yi (NameIdentifier) Connection ile eşleştirmesi için gerekli sınıf.
-/// </summary>
 public class CustomUserIdProvider : IUserIdProvider
 {
     public string? GetUserId(HubConnectionContext connection)
     {
-        // TokenService içerisinde belirlediğimiz ClaimTypes.NameIdentifier (User.Id) değerini çeker
         return connection.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
     }
 }

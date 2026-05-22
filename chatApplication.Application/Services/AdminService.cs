@@ -9,7 +9,7 @@ public class AdminService : IAdminService
 {
     private readonly IGenericRepository<User> _userRepository;
     private readonly IGenericRepository<Message> _messageRepository;
-    private readonly IGenericRepository<SystemLog> _logRepository; // Log repository
+    private readonly IGenericRepository<SystemLog> _logRepository;
 
     public AdminService(
         IGenericRepository<User> userRepository,
@@ -26,8 +26,8 @@ public class AdminService : IAdminService
         var allUsers = await _userRepository.GetAllAsync();
         var allMessages = await _messageRepository.GetAllAsync();
 
-        // Log ekle
-        await _logRepository.AddAsync(new SystemLog { EventType = "Info", Message = "Admin panel istatistikleri görüntülendi.", Timestamp = DateTime.UtcNow });
+        // GEREKSİZ LOG SATIRI BURADAN SİLİNDİ! 
+        // Böylece her 10 saniyede bir veritabanına kayıt atılmayacak.
 
         return new SystemStatsDto
         {
@@ -56,7 +56,14 @@ public class AdminService : IAdminService
         {
             user.IsOnline = false;
             await _userRepository.UpdateAsync(user);
-            await _logRepository.AddAsync(new SystemLog { EventType = "Security", Message = $"Admin, {user.PhoneNumber} oturumunu sonlandırdı.", Timestamp = DateTime.UtcNow });
+
+            // ÖNEMLİ: Güvenlik logu burada kalmalı çünkü bu yönetimsel bir işlemdir.
+            await _logRepository.AddAsync(new SystemLog
+            {
+                EventType = "Security",
+                Message = $"Admin, {user.PhoneNumber} oturumunu sonlandırdı.",
+                Timestamp = DateTime.UtcNow
+            });
         }
     }
 }

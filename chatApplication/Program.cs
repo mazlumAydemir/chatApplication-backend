@@ -127,18 +127,21 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
-app.UsePathBase("/chat-backend");
-// ==========================================
-// ⚠️ KRİTİK: UPLOADS KLASÖRÜNÜ HEMEN OLUŞTUR
-// UseStaticFiles'den ÖNCE olmalı!
-// ==========================================
 
-// ✅ DÜZELTME: Proje root'undaki uploads klasörünü bul
+// ==========================================
+// ⚠️ KRİTİK NGINX SUBPATH AYARI
+// ==========================================
+// Nginx'ten gelen /chat-backend isteklerini API'nin kök rotası olarak kabul etmesi için:
+app.UsePathBase("/chat-backend");
+
+// ==========================================
+// UPLOADS KLASÖRÜNÜ HEMEN OLUŞTUR
+// ==========================================
 var uploadsPath = Path.Combine(
-    AppDomain.CurrentDomain.BaseDirectory,  // /bin/Debug/net8.0 veya /bin/Release/net8.0
-    "..", "..", "..", "uploads"             // Proje root'una çık, uploads'a git
+    AppDomain.CurrentDomain.BaseDirectory,
+    "..", "..", "..", "uploads"
 );
-uploadsPath = Path.GetFullPath(uploadsPath);  // Gerçek path'i al
+uploadsPath = Path.GetFullPath(uploadsPath);
 
 try
 {
@@ -162,15 +165,20 @@ catch (Exception ex)
 // 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
 // ==========================================
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// ✅ KRİTİK SİGNALR VE PROXY AYARI:
+// Nginx ve Cloudflare üzerinden gelen gerçek IP ve WebSocket başlıklarını yakalamak için:
+var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
+forwardedOptions.KnownNetworks.Clear(); // Nginx'i güvenli proxy olarak tanıması için zorunlu
+forwardedOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedOptions);
 
-// ✅ DÜZELTME: Swagger'ın Nginx /chat-backend/ alt yolundan düzgün çalışması için güncellendi
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
+    // Swagger'ın Nginx /chat-backend/ alt yolundan düzgün çalışması için:
     c.SwaggerEndpoint("/chat-backend/swagger/v1/swagger.json", "IEA Chat API v1");
     c.RoutePrefix = "swagger";
 });
@@ -196,16 +204,13 @@ if (Directory.Exists(uploadsPath))
         FileProvider = new PhysicalFileProvider(uploadsPath),
         RequestPath = "/uploads",
         ContentTypeProvider = provider
-        // OnPrepareResponse blokunu kaldırdık çünkü UseCors artık bunu global olarak hallediyor.
     });
     Console.WriteLine("✅ /uploads endpoint'i aktif");
 }
-else
-{
-    Console.WriteLine($"❌ /uploads endpoint'i etkinleştirilemedi - klasör yok: {uploadsPath}");
-}
 
-app.UseHttpsRedirection();  // ✅ HTTPS redirect
+// 🛑 DİKKAT: Cloudflare zaten HTTPS sağladığı için bu satırı İPTAL ETTİK. (SignalR kopmalarını önler)
+// app.UseHttpsRedirection();  
+
 app.UseAuthentication();
 app.UseAuthorization();
 

@@ -81,7 +81,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
 
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub", StringComparison.OrdinalIgnoreCase))
+                // ✅ GÜNCELLEME: Hem normal hem de alt yol (subpath) üzerinden gelen SignalR token isteklerini yakala
+                if (!string.IsNullOrEmpty(accessToken) &&
+                   (path.StartsWithSegments("/chathub", StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWithSegments("/chat-backend/chathub", StringComparison.OrdinalIgnoreCase)))
                 {
                     context.Token = accessToken;
                 }
@@ -129,9 +132,8 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ==========================================
-// ⚠️ KRİTİK NGINX SUBPATH AYARI
+// ⚠️ NGINX SUBPATH AYARI
 // ==========================================
-// Nginx'ten gelen /chat-backend isteklerini API'nin kök rotası olarak kabul etmesi için:
 app.UsePathBase("/chat-backend");
 
 // ==========================================
@@ -165,25 +167,23 @@ catch (Exception ex)
 // 7. HTTP REQUEST PIPELINE (MIDDLEWARE'LER)
 // ==========================================
 
-// ✅ KRİTİK SİGNALR VE PROXY AYARI:
-// Nginx ve Cloudflare üzerinden gelen gerçek IP ve WebSocket başlıklarını yakalamak için:
+// ✅ PROXY BAŞLIKLARINI GÜVENLE YAKALA
 var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 };
-forwardedOptions.KnownNetworks.Clear(); // Nginx'i güvenli proxy olarak tanıması için zorunlu
+forwardedOptions.KnownNetworks.Clear();
 forwardedOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedOptions);
 
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    // Swagger'ın Nginx /chat-backend/ alt yolundan düzgün çalışması için:
     c.SwaggerEndpoint("/chat-backend/swagger/v1/swagger.json", "IEA Chat API v1");
     c.RoutePrefix = "swagger";
 });
 
-// ✅ KRİTİK DEĞİŞİKLİK: CORS, UseStaticFiles'dan ÖNCE çağrılmalı!
+// CORS Middleware'i
 app.UseCors("AllowReactApp");
 
 // .enc Uzantılı Şifreli Dosyalara İzin Verme Ayarı
@@ -208,14 +208,20 @@ if (Directory.Exists(uploadsPath))
     Console.WriteLine("✅ /uploads endpoint'i aktif");
 }
 
-// 🛑 DİKKAT: Cloudflare zaten HTTPS sağladığı için bu satırı İPTAL ETTİK. (SignalR kopmalarını önler)
+// 🛑 Cloudflare SSL yapılandırması sebebiyle devre dışı bırakıldı (WebSocket kopmalarını önler)
 // app.UseHttpsRedirection();  
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// ==========================================
+// SIGNALR HUB EŞLEŞTİRMELERİ
+// ==========================================
+// ✅ GÜNCELLEME: Nginx yönlendirme varyasyonlarının tamamını karşılamak için çift rota tanımlandı
 app.MapHub<ChatHub>("/chathub");
+app.MapHub<ChatHub>("/chat-backend/chathub");
 
 // ==========================================
 // DATABASE MIGRATION
@@ -241,7 +247,6 @@ app.Run();
 // ==========================================
 // YARDIMCI SINIFLAR
 // ==========================================
-
 public class CustomUserIdProvider : IUserIdProvider
 {
     public string? GetUserId(HubConnectionContext connection)
